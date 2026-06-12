@@ -1,0 +1,34 @@
+# OTP File Encryption Tool — .gitignore
+
+# ── Build output ──────────────────────────────────────────────────────────────
+build/
+*.o
+*.exe
+
+# ── NEVER commit key files — they are single-use secret material ─────────────
+keys/
+*.key
+*.lock
+
+# ── Working directories (contain plaintext and ciphertext) ────────────────────
+# Change these if you want to track specific files
+input_files/
+output_files/
+
+# ── Log files ─────────────────────────────────────────────────────────────────
+*.log
+log.txt
+
+# ── Windows artifacts ─────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+*.ncb
+*.sln.docstates
