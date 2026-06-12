@@ -4,6 +4,9 @@
 build/
 *.o
 *.exe
+tests/*.exe
+tests/tmp_*.*
+tests/fio_*.*
 
 # ── NEVER commit key files — they are single-use secret material ─────────────
 keys/

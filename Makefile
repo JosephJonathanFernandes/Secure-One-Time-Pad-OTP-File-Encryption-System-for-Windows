@@ -76,26 +76,15 @@ selftest: all
 	@echo.
 	$(TARGET) --selftest
 
-# ── Quick round-trip test ─────────────────────────────────────────────────────
-# Creates a test file, generates a key, encrypts, decrypts, compares with fc.
+# ── Unit Tests ────────────────────────────────────────────────────────────────
+# Builds and runs the comprehensive test suite in tests/
 test: all
-	@echo ============================================================
-	@echo  OTP Tool Round-Trip Test
-	@echo ============================================================
-	@echo This is a round-trip test of the OTP encryption system. > input_files\test_input.txt
-	@if exist keys\test.key        del /Q keys\test.key
-	@if exist keys\test.key.lock   del /Q keys\test.key.lock
-	@if exist output_files\test_output.enc     del /Q output_files\test_output.enc
-	@if exist output_files\test_recovered.txt  del /Q output_files\test_recovered.txt
-	@echo [1/3] Generating key...
-	$(TARGET) -g 4096 keys\test.key
-	@echo [2/3] Encrypting...
-	$(TARGET) -e input_files\test_input.txt output_files\test_output.enc keys\test.key
-	@echo [3/3] Decrypting...
-	$(TARGET) -d output_files\test_output.enc keys\test.key output_files\test_recovered.txt
-	@echo Comparing...
-	@fc /b input_files\test_input.txt output_files\test_recovered.txt > nul && \
-	    (echo [SUCCESS] Round-trip test PASSED!) || \
-	    (echo [ERROR] Round-trip test FAILED - files differ! & exit 1)
+	$(MAKE) -C tests run
 
-.PHONY: all clean test selftest release dirs
+# ── Code Formatting ───────────────────────────────────────────────────────────
+format:
+	@echo [INFO] Running clang-format...
+	clang-format -i src/*.c src/*.h tests/*.c tests/*.h
+	@echo [SUCCESS] Formatting complete.
+
+.PHONY: all clean test selftest release dirs format

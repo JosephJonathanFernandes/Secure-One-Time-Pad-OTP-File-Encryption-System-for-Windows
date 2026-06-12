@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MinGW-w64 (msys2)
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-make
+
+    - name: Build Main Application
+      shell: msys2 {0}
+      run: mingw32-make
+
+    - name: Run Built-in Self-Test
+      shell: msys2 {0}
+      run: build/otp.exe --selftest
+
+    - name: Run Unit Test Suite
+      shell: msys2 {0}
+      run: mingw32-make -C tests run

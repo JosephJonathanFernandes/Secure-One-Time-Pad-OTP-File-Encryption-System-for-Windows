@@ -1,0 +1,14 @@
+---
+Language: C
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 100
+UseTab: Never
+PointerAlignment: Right
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+DerivePointerAlignment: false
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: true
+...

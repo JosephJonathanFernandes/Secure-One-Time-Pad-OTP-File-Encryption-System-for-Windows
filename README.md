@@ -1,319 +1,120 @@
-# OTP File Encryption Tool
+# OTP File Encryption System
 
-> **Production-grade One-Time Pad file encryption for Windows.**
-> Built in C11, powered by Windows CNG (`BCryptGenRandom` + `BCrypt SHA-256`).
+[![CI](https://github.com/JosephJonathanFernandes/Secure-One-Time-Pad-OTP-File-Encryption-System-for-Windows/actions/workflows/ci.yml/badge.svg)](https://github.com/JosephJonathanFernandes/Secure-One-Time-Pad-OTP-File-Encryption-System-for-Windows/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg)](https://en.cppreference.com/w/c/11)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6.svg)](https://microsoft.com)
 
----
+> **A production-grade, cryptographically strict One-Time Pad (OTP) file encryption system built in pure C11 for Windows.**
 
-## Table of Contents
+## 🎯 The Problem & Purpose
 
-1. [Features](#features)
-2. [Architecture](#architecture)
-3. [Security Model](#security-model)
-4. [Building](#building)
-5. [Usage](#usage)
-6. [File Format](#file-format)
-7. [OTP Limitations](#otp-limitations)
-8. [Self-Test](#self-test)
+The One-Time Pad is the only encryption algorithm mathematically proven to be **Information-Theoretically Secure (Perfect Secrecy)**. No amount of computational power—including future quantum computers—can break it, provided the key is truly random, never reused, and kept secret.
 
----
+However, OTP is notoriously difficult to implement correctly in software due to key-reuse vulnerabilities, weak random number generators, and memory leaks.
 
-## Features
+This project exists to demonstrate **secure systems programming in C** by addressing these challenges head-on. It bridges the gap between theoretical cryptography and real-world software engineering by implementing an OTP system that is actually safe to run on multi-gigabyte files.
 
-| Feature | Detail |
-|---|---|
-| **True OTP encryption** | XOR with cryptographically random key, never reused |
-| **CSPRNG** | `BCryptGenRandom` (FIPS 140-2 system RNG) |
-| **Large file support** | Streaming 8 KB chunks — never loads whole file into RAM |
-| **SHA-256 integrity** | Embedded in ciphertext header; verified on every decrypt |
-| **Key reuse prevention** | `.lock` sidecar file; engine refuses to use a locked key |
-| **Secure key deletion** | 3-pass overwrite (0x00 / 0xFF / 0x00) then `remove()` |
-| **Progress bar** | Live MB/s progress on encrypt/decrypt |
-| **Batch encryption** | Encrypt all files in a directory in one command |
-| **Self-test mode** | Built-in 5-step round-trip proof of correctness |
-| **Coloured output** | ANSI colours via `ENABLE_VIRTUAL_TERMINAL_PROCESSING` |
+## 🏗️ Architecture
 
----
+The system is designed with strict separation of concerns, ensuring the cryptographic core is isolated from the CLI and file I/O operations.
 
-## Architecture
-
+```text
+/src
+ ├── main.c           # CLI parsing, validation, batch orchestration
+ ├── otp.c            # Core XOR engine and header construction
+ ├── crypto_win.c     # Cryptography (BCryptGenRandom, SHA-256)
+ ├── file_io.c        # File handles, locking mechanisms, large file support
+ └── logger.c         # Formatted output and progress tracking
 ```
-OTP File Encryption Tool
-├── src/
-│   ├── main.c          CLI entry point, argument parser, mode dispatcher
-│   ├── otp.c / otp.h   Core XOR engine, header read/write, key generation
-│   ├── crypto_win.c    BCryptGenRandom, SHA-256 (file & buffer), SecureZeroMemory
-│   ├── crypto_win.h
-│   ├── file_io.c       Safe open/read/write, file-size query, key lock lifecycle
-│   ├── file_io.h
-│   ├── logger.c        Tagged, coloured, timestamped log output + progress bar
-│   └── logger.h
-├── build/              Compiled output (otp.exe)
-├── input_files/        Sample plaintext files (not tracked by git)
-├── output_files/       Encrypted and decrypted outputs (not tracked by git)
-├── keys/               Key files (NEVER commit these to version control)
-├── Makefile            MinGW-w64 build (mingw32-make)
-├── build.bat           Alternative cmd.exe build script
-└── README.md
-```
+*For detailed diagrams and the binary file format, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).*
 
-### Module responsibilities
+## 🔒 Security Model & Features
 
-| Module | Responsibility |
-|---|---|
-| `main.c` | Parses CLI args, calls mode handlers, owns the progress callback |
-| `otp.c` | `otp_encrypt`, `otp_decrypt`, `otp_generate_key`, header I/O |
-| `crypto_win.c` | All Windows CNG calls; zero platform-specific code leaks out |
-| `file_io.c` | All `FILE*` operations; key lock `.lock` sidecar files |
-| `logger.c` | All `printf`/`fprintf` calls go through this layer |
+This system adheres to GitGuardian security best practices and strict C programming standards.
 
----
+### Core Cryptography
+*   **True Randomness**: Uses `BCryptGenRandom` (Windows CNG), the FIPS 140-2 certified system CSPRNG. No `rand()` or `time()` seeds are used.
+*   **Zero-Knowledge Ciphertext**: The payload leaks exactly zero bits of information about the plaintext.
+*   **Integrity Verification**: Plaintext is hashed via SHA-256. The digest is embedded in the ciphertext header and verified byte-for-byte upon decryption.
 
-## Security Model
+### System & Memory Safety
+*   **Zero-Allocation Data Path**: Processes files in streaming `8 KB` chunks. It can encrypt a 100 GB file using only a few kilobytes of RAM.
+*   **Secure Zeroization**: Sensitive stack buffers are wiped using `SecureZeroMemory` before functions return, preventing compiler optimizations from eliding the cleanup.
+*   **Key Reuse Prevention**: Atomic `.lock` sidecar files are generated before the first byte is encrypted. The engine refuses to operate if a key is locked.
+*   **Secure Deletion**: The `--self-destruct-key` flag performs a DoD-style 3-pass overwrite (`0x00`, `0xFF`, `0x00`) before file unlinking. *(See [SECURITY.md](docs/SECURITY.md) for SSD caveats).*
 
-### What OTP guarantees
+## 🚀 Building & Running
 
-A One-Time Pad is **information-theoretically secure** when used correctly:
+### Prerequisites
+*   Windows 10/11 (64-bit)
+*   [MinGW-w64](https://www.mingw-w64.org/) (`gcc` and `mingw32-make` on PATH)
 
-* An adversary who intercepts the ciphertext learns **zero bits** of the plaintext,
-  even with unlimited compute — because every plaintext is equally likely under a
-  random key.
+### Build
+```cmd
+:: Clone the repository
+git clone https://github.com/JosephJonathanFernandes/Secure-One-Time-Pad-OTP-File-Encryption-System-for-Windows.git
+cd Secure-One-Time-Pad-OTP-File-Encryption-System-for-Windows
 
-### What this implementation ensures
+:: Build using the provided script
+scripts\build.bat
 
-1. **Cryptographically random keys** — `BCryptGenRandom` with `BCRYPT_USE_SYSTEM_PREFERRED_RNG`
-   uses the Windows CSPRNG (Fortuna-based, FIPS 140-2 certified when in FIPS mode).
-
-2. **Key size = plaintext size** — The tool validates this before any operation.
-
-3. **One key, one use** — A `.lock` sidecar is created atomically before the first
-   byte is written. Even a crash mid-encryption leaves the key permanently locked.
-
-4. **Integrity checking** — SHA-256 of the plaintext is stored in the `.enc` header.
-   After decryption, the digest is recomputed and compared byte-for-byte.
-
-5. **Memory hygiene** — All key/plaintext/ciphertext stack buffers are wiped with
-   `SecureZeroMemory` after use. This prevents compiler optimisation from eliding
-   the zeroing.
-
-6. **No weak randomness** — `rand()`, `srand()`, `time()` seeds are never used for
-   key material.
-
-### What this implementation does NOT guarantee
-
-* **Forward secrecy** — The key file on disk is the single point of failure.
-  Protect it with filesystem ACLs, hardware security modules, or encrypted storage.
-* **Side-channel resistance** — The XOR loop is not timing-hardened.
-* **Deniability** — The `.enc` file header contains a magic number `OTP\x01` which
-  identifies it as OTP-encrypted.
-* **SSD secure erasure** — `fio_secure_delete` overwrites file contents, but SSDs
-  may retain data in wear-levelling blocks. For high-assurance environments, use
-  full-disk encryption.
-
----
-
-## Building
-
-### Requirements
-
-* Windows 10 or 11 (64-bit)
-* [MinGW-w64](https://www.mingw-w64.org/) with `gcc` and `mingw32-make` on `PATH`
-  — or — Visual Studio (MSVC) with Developer Command Prompt
-
-### MinGW-w64 (recommended)
-
-```bat
-:: Quick build (cmd.exe)
-build.bat
-
-:: Or via Makefile
+:: OR build via Makefile
 mingw32-make
+```
 
-:: Release build (full optimisations)
-mingw32-make release
-
-:: Run self-test to verify the build
+### Self-Test
+The application contains a built-in cryptographic validation suite.
+```cmd
 build\otp.exe --selftest
 ```
+This performs a 5-step round-trip encrypt/decrypt in memory, verifying the CSPRNG, XOR engine, SHA-256 integrity, and key locking mechanics before touching your files.
 
-### MSVC (Visual Studio Developer Prompt)
+## 💻 Usage
 
-```bat
-cl.exe /W4 /std:c11 /O2 /I src ^
-  src\main.c src\otp.c src\file_io.c src\crypto_win.c src\logger.c ^
-  /Fe:build\otp.exe ^
-  /link bcrypt.lib
+Generate a cryptographically secure key matching your file size:
+```cmd
+build\otp.exe -g 1024 keys\secret.key
 ```
 
-### GCC flags explained
-
-| Flag | Purpose |
-|---|---|
-| `-std=c11` | C11 standard |
-| `-Wall -Wextra -Wpedantic` | Maximum warnings |
-| `-Wformat=2` | Strict format-string checking |
-| `-O2` | Standard optimisations |
-| `-lbcrypt` | Link Windows CNG library |
-
----
-
-## Usage
-
-### Generate a key
-
-```bat
-otp.exe -g <size_bytes> <key.bin>
-
-:: Examples:
-otp.exe -g 4096 keys\small.key
-otp.exe -g 10M  keys\ten_mb.key
-otp.exe -g 1G   keys\one_gb.key
+Encrypt a file:
+```cmd
+build\otp.exe -e input.txt output.enc keys\secret.key
 ```
 
-Size suffixes: `K` (kilobytes), `M` (megabytes), `G` (gigabytes).
-
-### Encrypt a file
-
-```bat
-otp.exe -e <input> <output.enc> <key.bin>
-
-:: Example:
-otp.exe -e input_files\secret.txt output_files\secret.enc keys\secret.key
+Decrypt and securely destroy the key afterward:
+```cmd
+build\otp.exe -d output.enc keys\secret.key decrypted.txt --self-destruct-key
 ```
 
-The key file will be **locked** after this operation. Do not reuse it.
-
-### Decrypt a file
-
-```bat
-otp.exe -d <input.enc> <key.bin> <output>
-
-:: Example:
-otp.exe -d output_files\secret.enc keys\secret.key output_files\recovered.txt
-
-:: Securely delete key after decryption:
-otp.exe -d secret.enc secret.key out.txt --self-destruct-key
+Batch encrypt an entire directory (1 key generated per file):
+```cmd
+build\otp.exe --batch -e .\documents .\encrypted_docs .\keys
 ```
 
-### Verify a file's SHA-256 hash
+## 🧪 Testing
 
-```bat
-otp.exe --verify <file> <sha256_hex>
-
-:: Example:
-otp.exe --verify output_files\secret.enc a3f1c2...
+This project includes a bespoke, zero-dependency unit testing framework.
+```cmd
+:: Run the full test suite
+mingw32-make test
 ```
+The suite covers:
+*   NIST Known Answer Tests (KAT) for SHA-256
+*   Encrypt/Decrypt byte-for-byte correctness
+*   File lock lifecycle
+*   Invalid/Corrupt header detection
 
-### Batch encrypt a directory
+## ⚠️ OTP Limitations (The Honest Truth)
 
-```bat
-otp.exe --batch -e <input_dir> <output_dir> <key_dir>
+While OTP provides mathematically perfect secrecy, it is rarely the right tool for production applications.
+*   **Key Distribution**: You must transmit a key equal in size to your data over an already secure channel.
+*   **Storage Overhead**: Encrypting a 1 TB drive requires a 1 TB key.
 
-:: Example:
-otp.exe --batch -e input_files output_files keys
-```
+**For 99.9% of software engineering tasks, you should use AES-256-GCM.** This project exists as a portfolio piece to demonstrate competence in systems programming, memory safety, and applied cryptography.
 
-Each file in `input_dir` gets its own key in `key_dir`.
+## 🤝 Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for style guides, tooling, and PR processes.
 
-### Optional flags
-
-| Flag | Effect |
-|---|---|
-| `-v` / `--verbose` | Enable debug timestamps and extra diagnostics |
-| `--self-destruct-key` | 3-pass wipe + delete key on successful decrypt |
-| `--version` | Print version string |
-| `-h` / `--help` | Print help |
-| `--selftest` | Run internal 5-step round-trip test |
-
----
-
-## File Format
-
-Encrypted files use a 52-byte binary header followed by raw ciphertext:
-
-```
-Offset  Size  Field
-──────  ────  ─────────────────────────────────────────
-0       4     Magic: "OTP\x01" (identifies OTP files)
-4       8     Plaintext size (uint64, little-endian)
-12      32    SHA-256 of original plaintext
-44      8     Reserved (zeroed, for future use)
-52      N     Ciphertext (N = plaintext_size bytes)
-──────  ────  ─────────────────────────────────────────
-Total: 52 + N bytes
-```
-
-The key file is a raw binary file containing exactly N bytes of random data.
-
----
-
-## OTP Limitations
-
-One-Time Pad is information-theoretically perfect, but operationally demanding:
-
-| Limitation | Impact |
-|---|---|
-| **Key = file size** | A 1 GB file requires a 1 GB key |
-| **Key distribution** | Communicating the key securely is as hard as communicating the message |
-| **No key reuse** | Each encryption needs a fresh key |
-| **No authentication** | OTP alone provides confidentiality only; this tool adds SHA-256 integrity |
-| **Key management** | Lost key = irrecoverable ciphertext |
-
-For most real-world use cases, **AES-256-GCM** is preferable to OTP because it has
-manageable key sizes and built-in authentication. OTP is ideal for:
-
-* Demonstrating information-theoretic security in academic settings
-* Pre-shared key scenarios where key distribution is feasible (e.g., air-gapped systems)
-* Portfolio projects demonstrating cryptographic understanding
-
----
-
-## Self-Test
-
-Run the built-in cryptographic self-test:
-
-```bat
-build\otp.exe --selftest
-```
-
-The test performs 5 checks:
-
-| Step | What is verified |
-|---|---|
-| 1 | Known 64-byte plaintext is written to a temp file |
-| 2 | `BCryptGenRandom` generates a key of the correct size |
-| 3 | Encryption produces header + ciphertext of the right length |
-| 4 | Decryption recovers byte-identical plaintext + SHA-256 matches |
-| 5 | Attempting to reuse the key is rejected (`OTP_ERR_KEY_LOCKED`) |
-
-Expected output: `ALL TESTS PASSED — OTP engine is operating correctly`
-
-All temp files are cleaned up automatically.
-
----
-
-## Example Round-Trip
-
-```bat
-:: 1. Create test directories
-mkdir input_files output_files keys
-
-:: 2. Create a sample file
-echo This is my secret message > input_files\message.txt
-
-:: 3. Generate key (auto-sizes to file)
-otp.exe -g 1024 keys\message.key
-
-:: 4. Encrypt
-otp.exe -e input_files\message.txt output_files\message.enc keys\message.key
-
-:: 5. Decrypt
-otp.exe -d output_files\message.enc keys\message.key output_files\message_dec.txt
-
-:: 6. Compare
-fc input_files\message.txt output_files\message_dec.txt
-```
-
----
-
-*Built with Windows CNG — no external crypto libraries required.*
+## 📝 License
+This project is licensed under the MIT License.
