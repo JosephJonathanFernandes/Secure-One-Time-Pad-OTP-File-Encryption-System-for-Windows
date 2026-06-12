@@ -4,6 +4,7 @@
 # Builds the test executables and runs them.
 # =============================================================================
 
+SHELL   := cmd.exe
 CC      := gcc
 CFLAGS  := -Wall -Wextra -Wformat=2 -Wno-unused-parameter -std=c11 -O0 -g -I ../src
 LDFLAGS := -lbcrypt

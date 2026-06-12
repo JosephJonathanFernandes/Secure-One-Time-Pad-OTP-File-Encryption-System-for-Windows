@@ -18,6 +18,7 @@
 #   mingw32-make selftest
 # =============================================================================
 
+SHELL   := cmd.exe
 CC      := gcc
 TARGET  := build\otp.exe
 
