@@ -15,6 +15,7 @@
  *   (FIPS 180-4, Example 1)
  */
 
+#define TEST_RUNNER_IMPL
 #include "test_runner.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
